@@ -17,3 +17,24 @@ Explicit blocking and synchronization depend on which engine is used. On the cen
 For software engineers, Apple Silicon is attractive because much of the complexity is hidden. The operating system and frameworks handle core scheduling, memory sharing, and graphics processing unit command submission. For maximum performance, developers can use Metal for compute kernels, Accelerate for vector math, and Core ML or the Neural Engine application programming interface for machine learning. The main limitation is that the hardware is tightly integrated and not exposed at a low level the way CUDA or Tenstorrent's low-level interfaces are exposed.
 
 The key hardware takeaway is that Apple Silicon trades maximum raw performance and flexibility for integration and energy efficiency. It is not designed to be a datacenter training accelerator like the other two platforms, but it is very efficient for inference, media, and everyday computing within a strict power budget.
+
+# What the model illustrates
+A single compute_core block is reused for central processing unit, graphics processing unit, and Neural Engine, differing mainly in lane count, register file size, and instruction behavior.
+
+All engines connect to the same unified coherent fabric and the same dynamic random-access memory pool.
+
+The fabric is a simple arbiter; a real Apple System on Chip would have a full cache-coherent interconnect with snooping, multiple cache levels, and quality-of-service arbitration.
+
+A boot processor feeds instructions and accepts host Peripheral Component Interconnect Express commands.
+
+A media engine stub represents fixed-function video hardware.
+
+# Simplifications
+
+Real performance cores are deeply out-of-order with branch prediction, reorder buffers, and multiple execution pipes; this model is scalar and in-order.
+
+Real graphics processing units use 32-thread warps, partitionable L1/shared memory, and a hardware rasterizer; this model only shows shader computation.
+
+Real Neural Engines are much more specialized systolic arrays, not generic matrix cores.
+
+Real Apple Silicon has multiple levels of cache and a complex memory fabric, not a single flat arbitration to unified memory.
