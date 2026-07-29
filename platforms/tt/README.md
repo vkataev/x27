@@ -1,4 +1,23 @@
-# Mesh of Tensix Cores
+# Tenstorrent Tensix architecture
+
+The Tenstorrent device is a coprocessor that sits in a server next to a conventional central processing unit, which is usually an x86 or ARM processor. The central processing unit is called the host. The host talks to the Tenstorrent chip over a Peripheral Component Interconnect Express link, the same kind of high-speed bus used for graphics cards or network cards. The host runs a driver and a runtime that load programs onto the chip, start execution, and read back results.
+
+Inside the chip is a two-dimensional grid of many small cores called Tensix cores. Each Tensix core contains a tiny Reduced Instruction Set Computer Five controller, a small bank of fast static random-access memory called local scratchpad memory, a SIMD and matrix compute engine, and ports to the Network on Chip. The Reduced Instruction Set Computer Five controller is a general-purpose scalar processor, but it is small and in-order; its main job is to orchestrate the compute engine and manage data movement, not to run heavy scalar code.
+
+Instructions are consumed locally. Each Tensix core fetches instructions from a small instruction memory inside its tile, decodes them, and executes them. The programming model is not a traditional thread pool. Instead, a program is compiled into a dataflow graph where each node is an operation and edges represent tensors moving between operations. The compiler decides which Tensix core executes which operation, where the input and output tensors live, and when data must move over the Network on Chip. This means the compiler does spatial mapping: it places operations onto the physical two-dimensional mesh.
+
+Memory is not cache-coherent in the way a central processing unit is. There are no automatic caches that fill or evict behind the scenes. The fast static random-access memory in each core is explicitly managed by software. A tensor is either in that local static random-access memory or in the external dynamic random-access memory. The compiler or programmer decides. When a tensor is too large for all the local static random-access memory, it is broken into tiles and streamed in and out of the chip. External memory is attached through memory controllers that also hang off the Network on Chip.
+
+Communication between cores is explicit. To move data from core A to core B, the source core creates a Network on Chip packet containing the destination coordinates, the payload, and sometimes a length, and injects it into the mesh. Routers in each tile forward the packet hop by hop until it reaches the destination. There is no shared global address space that all cores can read and write transparently. Instead, every transfer is a routed packet.
+
+Because of this, explicit blocking and synchronization are common. A core may issue a load from dynamic random-access memory or a Network on Chip send and then must wait for completion before using the result. The compiler inserts these waits or schedules other work to hide latency. Global barriers across the whole mesh are also used to separate pipeline stages, for example between layers of a neural network.
+
+For software engineers, the programming stack has several layers. At the bottom is a low-level interface where you write kernels in C++ and explicitly place them on specific cores and manage static random-access memory. Above that is a higher-level tensor interface that looks more like a neural-network runtime and does much of the placement automatically. At the top are front ends for PyTorch or similar frameworks that compile models down to the spatial graph.
+
+The key hardware takeaway is that performance is dominated by how well the compiler keeps data in the distributed static random-access memory and how efficiently it routes tensors over the Network on Chip. A poorly mapped graph will spend most of its time waiting for dynamic random-access memory or congesting the Network on Chip, even though the raw compute throughput is high.
+
+
+## Mesh of Tensix Cores
 
 - Compute mesh: a generated 2D array of Tensix cores.
 - NoC interconnect: explicit wiring of neighbor outputs to inputs; boundaries tied to I/O.
@@ -12,7 +31,7 @@
   - There is normally a separate management/NoC configuration network, a clock/reset/power controller, and sometimes a host CPU complex on-die.
 
 
-## Tech Specs
+## Tech Specs (as of Jul 2026)
  
 <section id="card-comparison-table">
 <h3 id="card-comparison-table">Card Comparison Table<a class="headerlink" href="#card-comparison-table" title="Link to this heading">#</a></h3>
